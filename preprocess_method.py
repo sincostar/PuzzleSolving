@@ -12,11 +12,13 @@ sigma1 = 0.3
 sigma2 = 0.32
 sigma3 = 0.33
 sigma4 = 0.33
-RANDOM_SEED = 2
 
+RANDOM_SEED = 2
 WHOLE_IMG_NUM = 10000
-random.seed(RANDOM_SEED)
-WHOLE_IMG_SEED = [random.randint(0, 1000)for i in range(WHOLE_IMG_NUM)]
+WHOLE_IMG_SEED = []
+
+File_path = r'F:\Deepzzle\PuzzleSolving'
+Coco_path = r"F:\COCO 2014\train2014"
 
 dis_dic = {"01": 1., "02": 2., "03": 1., "04": 1.4142, "05": 2.2361, "06": 2., "07": 2.2361, "08": 2.8284,
            "12": 1., "13": 1.4142, "14": 1., "15": 1.4142, "16": 2.2361, "17": 2., "18": 2.2361,
@@ -29,12 +31,19 @@ dis_dic = {"01": 1., "02": 2., "03": 1., "04": 1.4142, "05": 2.2361, "06": 2., "
 
 
 def get_shuffle_image(img_arr, cur_id=0, save_path=None):
-    '''
+    """
+
+    :param img_arr:
+    :param cur_id:
+    :param save_path:
+    :return:  the shuffle image (ndarray) and shuffle label.
+
     Get the shuffle image for training and testing.
-    Return the shuffle image (ndarray) and shuffle label.
-    Save the image as .jpg file and file name will include the image id and shuffle label.
-    '''
-    img_arr.pop(4)
+    If save image path is Not None:
+        Save the image as .jpg file and file name will include the image id and shuffle label.
+    """
+
+    central_fragment = img_arr.pop(4)
     change_img_arr = img_arr.copy()
     # create 4 more blight rate fragment
     # random.seed(RANDOM_SEED)
@@ -61,23 +70,21 @@ def get_shuffle_image(img_arr, cur_id=0, save_path=None):
         cur_index = int(shuffle_list[i])
         cur_p_label = [0] * 8
         cur_p_label[cur_index] = 1
-        if cur_index < 4:
-            change_img_arr[i] = img_arr[cur_index]
-        else:
-            change_img_arr[i] = img_arr[cur_index+1]
+        change_img_arr[i] = img_arr[cur_index]
         p_label.append(cur_p_label)
 
     new_img1 = np.concatenate((change_img_arr[0], change_img_arr[1], change_img_arr[2]), axis=1)
-    new_img2 = np.concatenate((change_img_arr[3], img_arr[4], change_img_arr[4]), axis=1)
+    new_img2 = np.concatenate((change_img_arr[3], central_fragment, change_img_arr[4]), axis=1)
     new_img3 = np.concatenate((change_img_arr[5], change_img_arr[6], change_img_arr[7]), axis=1)
     new_img = np.concatenate((new_img1, new_img2, new_img3), axis=0)
     # cv2.imshow('shuffle', new_img)
     # cv2.waitKey(100000)
     if save_path is not None:
-        cv2.imwrite(save_path + '_' + str(shuffle_list[0] + 1) + '_' + str(shuffle_list[1] + 1)
-                    + '_' + str(shuffle_list[2] + 1) + '_' + str(shuffle_list[3] + 1)
-                    + '_' + str(shuffle_list[4] + 1) + '_' + str(shuffle_list[5] + 1)
-                    + '_' + str(shuffle_list[6] + 1) + '_' + str(shuffle_list[7] + 1) + '.jpg', new_img)
+        cv2.imwrite(os.path.join(save_path, '{0:05d}'.format(cur_id)
+                                 + '_' + str(shuffle_list[0]) + '_' + str(shuffle_list[1])
+                                 + '_' + str(shuffle_list[2]) + '_' + str(shuffle_list[3])
+                                 + '_' + str(shuffle_list[4]) + '_' + str(shuffle_list[5])
+                                 + '_' + str(shuffle_list[6]) + '_' + str(shuffle_list[7]) + '.jpg'), new_img)
     return p_label, new_img
 
 
@@ -104,24 +111,25 @@ def get_reassemble_image(img_arr, bias_list, original_img=None):
     return out_img
 
 
-def get_fragment_list(input_path, cur_id=0, save_unshuffled_path=None):
+def get_fragment_list(img_arr, cur_id=0, save_unshuffled_path=None):
     """
-    :param input_path: input image path
+    :param img_arr: input image array
     :param cur_id: cur_id to set the label and Random Seed
     :param save_unshuffled_path: save the image with dark gap, default is None
     :return: 9 segmentation fragment of image as numpy array; bias list to ensure the image recover
 
     resize the image into 398*398 shape with gap
     """
-    img_arr = cv2.imread(input_path)
     height, width, _ = img_arr.shape
     out_size = (398, 398)
 
     # resize the image and cut the other
-    if width >= height:
+    if width > height:
         cropped_img = img_arr[:, int(width / 2) - math.ceil(height / 2): int(width / 2) + math.floor(height / 2), :]
-    else:
+    elif width < height:
         cropped_img = img_arr[int(height / 2) - math.ceil(width / 2): int(height / 2) + math.floor(width / 2), :, :]
+    else:
+        cropped_img = img_arr
     resized_img = cv2.resize(cropped_img, out_size)
 
     # create the fragment
@@ -140,8 +148,8 @@ def get_fragment_list(input_path, cur_id=0, save_unshuffled_path=None):
     # set the gap part as darkened place and reassemble the un-darkened fragment as true image
     out_img = get_reassemble_image([img1, img2, img3, img4, img5, img6, img7, img8, img9], bias_list, resized_img)
     if save_unshuffled_path is not None:
-        cv2.imwrite(save_unshuffled_path + '/' + str(cur_id) + '.jpg', out_img)
-    return [img1, img2, img3, img4, img5, img6, img7, img8, img9]
+        cv2.imwrite(save_unshuffled_path + '/' + '{0:05d}'.format(cur_id) + '.jpg', out_img)
+    return [img1, img2, img3, img4, img5, img6, img7, img8, img9, bias_list]
 
 
 def get_hori(input_path, cur_id=0):
@@ -242,38 +250,87 @@ def get_vert(input_path, cur_id=0):
     return p_img, p_label
 
 
-'''
-image source from CoCo dataset
-use 10000 image for training and 2000 image for testing
-the central fragment is fixed. the 8 round side fragments is flexible
-save the preprocessed image with gap (the gap part is darkened)
-save the shuffled image after gap process
-save the bias_list to ensure the image recover
-'''
-def get_8fragment_dataset(input_path, gap_image_path=None, shuffled_fragment_path=None, bias_list_path=None):
-    image_name_list = random.sample(os.listdir(input_path), 12000)
-    train_image_name_list = image_name_list[:10000]
-    test_image_name_list = image_name_list[10000:]
+def get_8fragment_dataset(input_path, gap_image_path=None, shuffled_fragment_path=None):
+    """
+
+    :param input_path: Coco dataset path
+    :param gap_image_path: Save gap image path, if do not save image gap_image_path is None
+    :param shuffled_fragment_path: Save gap image path, if do not save image gap_image_path is None
+    :param bias_list_path: Save bias_list path
+    :return: None
+
+    image source from CoCo dataset
+    use 10000 image for training and 2000 image for testing
+    the central fragment is fixed. the 8 round side fragments is flexible
+    save the preprocessed image with gap (the gap part is darkened)
+    save the shuffled image after gap process
+    save the bias_list to ensure the image recover
+    """
+    global WHOLE_IMG_NUM, WHOLE_IMG_SEED
+    WHOLE_IMG_NUM = 12000
+    random.seed(RANDOM_SEED)
+    WHOLE_IMG_SEED = [random.randint(0, 1000) for i in range(WHOLE_IMG_NUM)]
+
+    random.seed(RANDOM_SEED)
+    image_name_list = os.listdir(input_path)
+    random.shuffle(image_name_list)
+
+    if gap_image_path is not None and not os.path.exists(gap_image_path):
+        os.mkdir(gap_image_path)
+    if shuffled_fragment_path is not None and not os.path.exists(shuffled_fragment_path):
+        os.mkdir(shuffled_fragment_path)
 
     train_bias_list = []
-    for i in range(len(train_image_name_list)):
-        img1, img2, img3, img4, img5, img6, img7, img8, img9, bias_list = get_fragment_list(
-            os.path.join(input_path, train_image_name_list[i]), i, save_unshuffled_path=gap_image_path)
-        train_bias_list.append(bias_list)
-        get_shuffle_image([img1, img2, img3, img4, img5, img6, img7, img8, img9], cur_id=i)
+    train_img_arr_list = []
+    train_img_label_list = []
+    with tqdm(total=10000) as pbar:
+        for i in range(10000):
+            while True:
+                file_name = image_name_list.pop(0)
+                img_arr = cv2.imread(os.path.join(input_path, file_name))
+                if img_arr is not None:
+                    break
+            img1, img2, img3, img4, img5, img6, img7, img8, img9, bias_list = get_fragment_list(img_arr,
+                                                                                                cur_id=i,
+                                                                                                save_unshuffled_path=gap_image_path)
+            train_bias_list.append(bias_list)
+            img_label, img_arr = get_shuffle_image([img1, img2, img3, img4, img5, img6, img7, img8, img9], cur_id=i,
+                                                   save_path=shuffled_fragment_path)
+            train_img_arr_list.append(img_arr)
+            train_img_label_list.append(img_label)
+            pbar.update(1)
+    np.save(os.path.join(File_path, 'train_img.npy'), np.array(train_img_arr_list, dtype=np.uint8))
+    np.save(os.path.join(File_path, 'train_label.npy'), np.array(train_img_label_list, dtype=bool))
+    np.save(os.path.join(File_path, 'train_bias_list.npy'), np.array(train_bias_list, dtype=int))
 
     test_bias_list = []
-    for i in range(len(test_image_name_list)):
-        img1, img2, img3, img4, img5, img6, img7, img8, img9, bias_list = get_fragment_list(
-            os.path.join(input_path, test_image_name_list[i]), i, save_unshuffled_path=gap_image_path)
-        test_bias_list.append(bias_list)
-        get_shuffle_image([img1, img2, img3, img4, img5, img6, img7, img8, img9], cur_id=i)
-
+    test_img_arr_list = []
+    test_img_label_list = []
+    with tqdm(total=2000) as pbar:
+        for i in range(2000):
+            while True:
+                file_name = image_name_list.pop(0)
+                img_arr = cv2.imread(os.path.join(input_path, file_name))
+                if img_arr is not None:
+                    break
+            img1, img2, img3, img4, img5, img6, img7, img8, img9, bias_list = get_fragment_list(img_arr, cur_id=i+10000, save_unshuffled_path=gap_image_path)
+            test_bias_list.append(bias_list)
+            img_arr, img_label = get_shuffle_image([img1, img2, img3, img4, img5, img6, img7, img8, img9],
+                                                   cur_id=i+10000,
+                                                   save_path=shuffled_fragment_path)
+            test_img_arr_list.append(img_arr)
+            test_img_label_list.append(img_label)
+            pbar.update(1)
+    np.save(os.path.join(File_path, 'test_img.npy'), np.array(test_img_arr_list, dtype=np.uint8))
+    np.save(os.path.join(File_path, 'test_label.npy'), np.array(test_img_label_list, dtype=bool))
+    np.save(os.path.join(File_path, 'test_bias_list.npy'), np.array(test_bias_list, dtype=int))
 
 
 def main():
-    coco_path = r"F:\COCO 2014\train2014"
-    get_8fragment_dataset(coco_path)
+    coco_path = Coco_path
+    get_8fragment_dataset(coco_path,
+                          gap_image_path=os.path.join(File_path, "gap_image"),
+                          shuffled_fragment_path=os.path.join(File_path, "shuffle_fragment"))
 
 
 if __name__ == '__main__':
